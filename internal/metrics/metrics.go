@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henrywhitaker3/adguard-exporter/internal/adguard"
+	"github.com/alindesign/adguard-exporter/internal/adguard"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -14,8 +14,6 @@ var (
 		Namespace: "adguard",
 		Help:      "The number of errors scraping a target",
 	}, []string{"server"})
-
-	// Status
 	ProtectionEnabled = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name:      "protection_enabled",
 		Namespace: "adguard",
@@ -26,8 +24,6 @@ var (
 		Namespace: "adguard",
 		Help:      "Whether adguard is running or not",
 	}, []string{"server", "version"})
-
-	// Stats
 	TotalQueries = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name:      "queries",
 		Namespace: "adguard",
@@ -109,8 +105,6 @@ var (
 		Help:      "Total queries by user",
 		Buckets:   prometheus.LinearBuckets(0, 10, 10),
 	}, []string{"server", "user", "reason", "status", "upstream", "client_name", "protocol"})
-
-	// DHCP
 	DhcpEnabled = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name:      "dhcp_enabled",
 		Namespace: "adguard",
@@ -167,10 +161,8 @@ func (d *DhcpLeasesServer) Describe(ch chan<- *prometheus.Desc) {
 	ch <- d.Desc
 }
 
-func Init() {
+func Setup() {
 	prometheus.MustRegister(ScrapeErrors)
-
-	// Stats
 	prometheus.MustRegister(TotalQueries)
 	prometheus.MustRegister(BlockedFiltered)
 	prometheus.MustRegister(ReplacedSafesearch)
@@ -191,8 +183,6 @@ func Init() {
 	// Status
 	prometheus.MustRegister(Running)
 	prometheus.MustRegister(ProtectionEnabled)
-
-	// DHCP
 	prometheus.MustRegister(DhcpEnabled)
 	prometheus.MustRegister(DhcpLeases)
 }

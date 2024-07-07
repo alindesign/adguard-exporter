@@ -9,55 +9,64 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
 	"time"
 
-	"github.com/henrywhitaker3/adguard-exporter/internal/config"
+	"github.com/alindesign/adguard-exporter/internal/config"
 	"github.com/mitchellh/mapstructure"
 )
 
 type Client struct {
-	conf config.Config
+	conf config.Client
 }
 
-func NewClient(conf config.Config) *Client {
-	return &Client{
-		conf: conf,
-	}
+func NewClient(conf config.Client) *Client {
+	return &Client{conf}
 }
 
-func (c *Client) do(ctx context.Context, method string, path string, out any) error {
+func (c *Client) do(ctx context.Context, out any, method string, path string, query url.Values) error {
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.conf.Username, c.conf.Password)))
-	url, err := url.Parse(fmt.Sprintf("%s%s", c.conf.Url, path))
+	addr, err := netip.ParseAddrPort(c.Url())
 	if err != nil {
 		return err
 	}
 
-	req := &http.Request{
-		Method: method,
-		Header: http.Header{},
-		URL:    url,
+	headers := http.Header{}
+	headers.Add("Authorization", fmt.Sprintf("Basic %s", auth))
+
+	endpoint := &url.URL{
+		Scheme:   "http",
+		Host:     addr.String(),
+		Path:     path,
+		RawQuery: query.Encode(),
 	}
-	req.Header.Add("Authorization", fmt.Sprintf("Basic %s", auth))
+
+	req := &http.Request{Method: method, URL: endpoint, Header: headers}
 	req = req.WithContext(ctx)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code %d: %v", resp.StatusCode, err)
 	}
+
 	defer resp.Body.Close()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
+
 	if err := json.Unmarshal(body, out); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -106,20 +115,19 @@ func (c *Client) doPost(ctx context.Context, path string, body any, out any) err
 
 func (c *Client) GetStats(ctx context.Context) (*Stats, error) {
 	out := &Stats{}
-	err := c.do(ctx, http.MethodGet, "/control/stats", out)
+	err := c.do(ctx, out, http.MethodGet, "/control/stats", url.Values{})
 	return out, err
 }
 
 func (c *Client) GetStatus(ctx context.Context) (*Status, error) {
 	out := &Status{}
-	err := c.do(ctx, http.MethodGet, "/control/status", out)
+	err := c.do(ctx, out, http.MethodGet, "/control/status", url.Values{})
 	return out, err
 }
 
 func (c *Client) GetDhcp(ctx context.Context) (*DhcpStatus, error) {
 	out := &DhcpStatus{}
-	err := c.do(ctx, http.MethodGet, "/control/dhcp/status", out)
-	if err != nil {
+	if err := c.do(ctx, out, http.MethodGet, "/control/dhcp/status", url.Values{}); err != nil {
 		return nil, err
 	}
 
@@ -128,6 +136,7 @@ func (c *Client) GetDhcp(ctx context.Context) (*DhcpStatus, error) {
 		l.Type = "dynamic"
 		out.DynamicLeases[i] = l
 	}
+
 	for i := range out.StaticLeases {
 		l := out.StaticLeases[i]
 		l.Type = "static"
@@ -141,17 +150,21 @@ func (c *Client) GetDhcp(ctx context.Context) (*DhcpStatus, error) {
 
 // func (c *Client) GetQueryLog(ctx context.Context) (map[string]map[string]int, []QueryTime, QueryPerClient, error) {
 func (c *Client) GetQueryLog(ctx context.Context) (map[string]map[string]int, []QueryTime, []logEntry, error) {
-	log := &queryLog{}
-	err := c.do(ctx, http.MethodGet, "/control/querylog?limit=1000&response_status=all", log)
+	logger := &queryLog{}
+	err := c.do(ctx, logger, http.MethodGet, "/control/querylog", url.Values{
+		"limit":           {"1000"},
+		"response_status": {"all"},
+	})
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	types, err := c.getQueryTypes(log)
+	types, err := c.getQueryTypes(logger)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	times, err := c.getQueryTimes(log)
+
+	times, err := c.getQueryTimes(logger)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -159,9 +172,9 @@ func (c *Client) GetQueryLog(ctx context.Context) (map[string]map[string]int, []
 	return types, times, log.Log, nil
 }
 
-func (c *Client) getQueryTypes(log *queryLog) (map[string]map[string]int, error) {
+func (c *Client) getQueryTypes(logger *queryLog) (map[string]map[string]int, error) {
 	out := map[string]map[string]int{}
-	for _, d := range log.Log {
+	for _, d := range logger.Log {
 		if d.Answer != nil && len(d.Answer) > 0 {
 			if _, ok := out[d.Client]; !ok {
 				out[d.Client] = map[string]int{}
@@ -172,26 +185,33 @@ func (c *Client) getQueryTypes(log *queryLog) (map[string]map[string]int, error)
 					out[d.Client][d.Answer[i].Type]++
 				case map[string]any:
 					dns65 := &type65{}
-					mapstructure.Decode(v, dns65)
+					err := mapstructure.Decode(v, dns65)
+					if err != nil {
+						log.Printf("Warn - could not decode dns65: %v\n", err)
+						continue
+					}
 					out[d.Client]["TYPE"+strconv.Itoa(dns65.Hdr.Rrtype)]++
 				}
 			}
 		}
 	}
+
 	return out, nil
 }
 
 func (c *Client) getQueryTimes(l *queryLog) ([]QueryTime, error) {
-	out := []QueryTime{}
+	var out []QueryTime
 	for _, q := range l.Log {
 		if q.Upstream == "" {
 			q.Upstream = "self"
 		}
+
 		ms, err := strconv.ParseFloat(q.Elapsed, 32)
 		if err != nil {
 			log.Printf("ERROR - could not parse query elapsed time %v as float\n", q.Elapsed)
 			continue
 		}
+
 		out = append(out, QueryTime{
 			Elapsed:  time.Millisecond * time.Duration(ms),
 			Client:   q.Client,
@@ -202,7 +222,7 @@ func (c *Client) getQueryTimes(l *queryLog) ([]QueryTime, error) {
 }
 
 func (c *Client) Url() string {
-	return c.conf.Url
+	return c.conf.Address
 }
 
 func (c *Client) SearchClients(ctx context.Context, topClients []map[string]int) (map[string]string, error) {

@@ -40,7 +40,7 @@ type DhcpLease struct {
 }
 
 type DhcpStatus struct {
-	Enabled       Bool        ` json:"enabled"`
+	Enabled       Bool        `json:"enabled"`
 	DynamicLeases []DhcpLease `json:"leases"`
 	StaticLeases  []DhcpLease `json:"static_leases"`
 	Leases        []DhcpLease

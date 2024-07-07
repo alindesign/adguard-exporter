@@ -1,0 +1,3 @@
+- address: 127.0.0.1:8080   # or file /path/to/my/url_file
+  username: user            # or file /path/to/my/username_file
+  password: password        # or file /path/to/my/password_file

@@ -65,7 +65,7 @@
       }
     ]
   },
-  "description": "This is a AdGuard Home dashboard when using the https://github.com/henrywhitaker3/adguard-exporter Prometheus exporter",
+  "description": "This is a AdGuard Home dashboard when using the https://github.com/alindesign/adguard-exporter Prometheus exporter",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,

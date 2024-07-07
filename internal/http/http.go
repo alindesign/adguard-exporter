@@ -3,10 +3,12 @@ package http
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"sync"
 
+	"github.com/alindesign/adguard-exporter/internal/config"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 )
@@ -19,12 +21,15 @@ type Http struct {
 	healthMu *sync.Mutex
 }
 
-func NewHttp(debug bool) *Http {
+func NewHttp(configuration *config.Config) *Http {
+	addr := net.JoinHostPort(configuration.Host, configuration.Port)
+
 	e := echo.New()
 	e.HideBanner = true
 
 	e.GET("/metrics", echoprometheus.NewHandler())
-	if debug {
+
+	if configuration.Debug {
 		e.GET("/debug/*", echo.WrapHandler(http.DefaultServeMux))
 	}
 
@@ -40,9 +45,9 @@ func NewHttp(debug bool) *Http {
 	return http
 }
 
-func (h *Http) Serve(bindAddr string) error {
-	log.Println("Starting http server on " + bindAddr)
-	return h.e.Start(bindAddr)
+func (h *Http) Serve() error {
+	log.Printf("Starting http server on %s", h.addr)
+	return h.e.Start(h.addr)
 }
 
 func (h *Http) Stop(ctx context.Context) error {
