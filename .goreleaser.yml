@@ -24,42 +24,42 @@ dockers:
       - "--platform=linux/amd64"
     dockerfile: Dockerfile
     image_templates:
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-amd64
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-amd64
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-amd64
+      - ghcr.io/alindesign/adguard-exporter:latest-amd64
   - goos: linux
     goarch: arm64
     build_flag_templates:
       - "--platform=linux/arm64/v8"
     dockerfile: Dockerfile
     image_templates:
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-arm64v8
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-arm64v8
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-arm64v8
+      - ghcr.io/alindesign/adguard-exporter:latest-arm64v8
   - goos: linux
     goarch: arm
     build_flag_templates:
       - "--platform=linux/arm/v6"
     dockerfile: Dockerfile
     image_templates:
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-armv6
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-armv6
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-armv6
+      - ghcr.io/alindesign/adguard-exporter:latest-armv6
   - goos: linux
     goarch: arm
     build_flag_templates:
       - "--platform=linux/arm/v7"
     dockerfile: Dockerfile
     image_templates:
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-armv7
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-armv7
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-armv7
+      - ghcr.io/alindesign/adguard-exporter:latest-armv7
 docker_manifests:
-  - name_template: ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}
+  - name_template: ghcr.io/alindesign/adguard-exporter:{{ .Tag }}
     image_templates:
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-amd64
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-arm64v8
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-armv7
-      - ghcr.io/henrywhitaker3/adguard-exporter:{{ .Tag }}-armv6
-  - name_template: ghcr.io/henrywhitaker3/adguard-exporter:latest
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-amd64
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-arm64v8
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-armv7
+      - ghcr.io/alindesign/adguard-exporter:{{ .Tag }}-armv6
+  - name_template: ghcr.io/alindesign/adguard-exporter:latest
     image_templates:
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-amd64
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-arm64v8
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-armv7
-      - ghcr.io/henrywhitaker3/adguard-exporter:latest-armv6
+      - ghcr.io/alindesign/adguard-exporter:latest-amd64
+      - ghcr.io/alindesign/adguard-exporter:latest-arm64v8
+      - ghcr.io/alindesign/adguard-exporter:latest-armv7
+      - ghcr.io/alindesign/adguard-exporter:latest-armv6

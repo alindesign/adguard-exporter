@@ -1,6 +1,6 @@
 {
   "branches": ["main"],
-  "repositoryUrl": "https://github.com/henrywhitaker3/adguard-exporter",
+  "repositoryUrl": "https://github.com/alindesign/adguard-exporter",
   "plugins": [
     [
       "@semantic-release/github",

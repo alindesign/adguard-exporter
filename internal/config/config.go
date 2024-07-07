@@ -1,84 +1,122 @@
 package config
 
 import (
-	"context"
 	"errors"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
-	"github.com/sethvargo/go-envconfig"
+	"gopkg.in/yaml.v3"
 )
 
-type Global struct {
-	Server  Server
-	Configs []Config
-}
-
-type Server struct {
-	Interval time.Duration `env:"INTERVAL, default=30s"`
-	Debug    bool          `env:"DEBUG, default=false"`
-}
-
-type Config struct {
-	Url      string
+type Client struct {
+	Address  string
 	Username string
 	Password string
 }
 
-type EnvConfig struct {
-	Urls      []string `env:"ADGUARD_SERVERS"`
-	Usernames []string `env:"ADGUARD_USERNAMES"`
-	Passwords []string `env:"ADGUARD_PASSWORDS"`
+type Config struct {
+	Interval    time.Duration `env:"APP_INTERVAL, default=30s"`
+	Debug       bool          `env:"APP_DEBUG, default=false"`
+	Port        string        `env:"SERVER_PORT, default=9618"`
+	Host        string        `env:"SERVER_HOST, default=127.0.0.1"`
+	ClientsFile string        `env:"CLIENTS_FILE, default=/etc/adguard-exporter/clients.yaml"`
+	Clients     []Client
 }
 
-func FromEnv() (*Global, error) {
-	godotenv.Load()
-
-	env := &EnvConfig{}
-	if err := envconfig.Process(context.Background(), env); err != nil {
-		return nil, err
-	}
-	serv := &Server{}
-	if err := envconfig.Process(context.Background(), serv); err != nil {
-		return nil, err
-	}
-
-	if err := env.Validate(); err != nil {
-		return nil, err
-	}
-
-	configs := []Config{}
-	for i := range env.Urls {
-		configs = append(configs, Config{
-			Url:      env.Urls[i],
-			Username: env.Usernames[i],
-			Password: env.Passwords[i],
-		})
-	}
-
-	return &Global{
-		Server:  *serv,
-		Configs: configs,
-	}, nil
+type EnvVal interface {
+	time.Duration | bool | string
 }
 
-func (e *EnvConfig) Validate() error {
-	if len(e.Urls) == 0 {
-		return errors.New("no urls supplied")
-	}
-	if len(e.Usernames) == 0 {
-		return errors.New("no usernames supplied")
-	}
-	if len(e.Passwords) == 0 {
-		return errors.New("no passwords supplied")
+func env(key string, def string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
 
-	if len(e.Urls) != len(e.Usernames) {
-		return errors.New("number of urls does not match number of usernames")
+	return def
+}
+
+func Load() (*Config, error) {
+	interval, err := time.ParseDuration(env("APP_INTERVAL", "30s"))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse interval: %v", err)
 	}
-	if len(e.Urls) != len(e.Passwords) {
-		return errors.New("number of urls does not match number of passwords")
+
+	config := &Config{
+		Interval:    interval,
+		Debug:       env("APP_DEBUG", "false") == "true",
+		Port:        env("SERVER_PORT", "9618"),
+		Host:        env("SERVER_HOST", ""),
+		ClientsFile: env("CLIENTS_FILE", "/etc/adguard-exporter/clients.yaml"),
+	}
+
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
+
+	err = config.loadClients()
+	if err != nil {
+		return config, err
+	}
+
+	return config, nil
+}
+
+func (c *Config) loadClients() error {
+	contents, err := os.ReadFile(c.ClientsFile)
+	if err != nil {
+		return fmt.Errorf("could not read clients file: %v", err)
+	}
+
+	err = yaml.Unmarshal(contents, &c.Clients)
+	if err != nil {
+		return fmt.Errorf("could not unmarshal clients file: %v", err)
+	}
+
+	if len(c.Clients) == 0 {
+		return errors.New("no configured clients")
+	}
+
+	for i, client := range c.Clients {
+		client.Address = c.tryFile(client.Address)
+		client.Username = c.tryFile(client.Username)
+		client.Password = c.tryFile(client.Password)
+		c.Clients[i] = client
 	}
 
 	return nil
+}
+
+func (c *Config) validate() error {
+	if c.Interval <= 0 {
+		return errors.New("interval must be greater than 0")
+	}
+
+	if c.Port == "" {
+		return errors.New("port must be set")
+	}
+
+	if c.ClientsFile == "" {
+		return errors.New("clients file must be set")
+	}
+
+	if _, err := os.Stat(c.ClientsFile); os.IsNotExist(err) {
+		return errors.New("clients file does not exist")
+	}
+
+	return nil
+}
+
+func (c *Config) tryFile(path string) string {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return path
+	}
+
+	return strings.TrimSpace(string(contents))
 }

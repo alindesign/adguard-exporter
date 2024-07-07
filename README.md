@@ -1,6 +1,11 @@
 # AdGuard Home Prometheus Exporter
 
-This is a Prometheus exporter for [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome).
+This is a Prometheus exporter for [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome). <br/>
+<small>(forked from [henrywhitaker3/adguard-exporter](https://github.com/henrywhitaker3/adguard-exporter))</small>
+
+Differences:
+- Support for clients configuration file
+- Support for username and password files
 
 ![Dashboard](grafana/dashboard.png)
 
@@ -12,35 +17,58 @@ You can run it using the following example and pass configuration environment va
 
 ```
 $ docker run \
-  -e 'ADGUARD_SERVERS=http://192.168.1.2' \
-  -e 'ADGUARD_USERNAMES=demo' \
-  -e 'ADGUARD_PASSWORDS=mypassword' \
-  -e 'INTERVAL=15s' \ # Optional, defaults to 30s
+  -e 'APP_INTERVAL=15s' \ # defaults to 30s
+  -e 'APP_DEBUG=true' \ # defaults to false
+  -e 'CLIENTS_FILE=/data/clients.yaml' \ # defaults to '/etc/adguard-exporter/clients.yaml'
   -p 9618:9618 \
-  ghcr.io/henrywhitaker3/adguard-exporter:latest
+  ghcr.io/alindesign/adguard-exporter:latest
 ```
 
-A single instance of adguard-exporter can monitor multiple AdGuard Home instances.
-To do so, you can specify a list of servers, usernames and passwords by separating them with commas in their respective environment variable:
+### using Docker Compose
 
-```
-$ docker run \
-  -e 'ADGUARD_SERVERS=http://192.168.1.2,http://192.168.1.3,http://192.168.1.4"' \
-  -e "ADGUARD_USERNAMES=$USERNAME1,$USERNAME2,$USERNAME3" \
-  -e "ADGUARD_PASSWORDS=$PASSWORD1,$PASSWORD2,$PASSWORD3" \
-  -p 9618:9618 \
-  ghcr.io/henrywhitaker3/adguard-exporter:latest
+```yaml
+services:
+  adguard-exporter:
+    image: ghcr.io/evgeni/adguard-exporter:latest
+    environment:
+      APP_INTERVAL: 15s
+      APP_DEBUG: true
+      CLIENTS_FILE: /data/clients.yaml
+    ports:
+      - 9618:9618
+    volumes:
+      - ./clients.yaml:/data/clients.yaml
+
 ```
 
 ### Env Vars
 
-| Variable | Description | Required | Default |
-| --- | --- | --- | --- |
-| `ADGUARD_SERVERS` | The servers you want the exporter to scrape. Must include the scheme `http(s)` and port if non-standard. | `True` | |
-| `ADGUARD_USERNAMES` | The username to connect to the adguard api with. Must be in the same order as `ADGUARD_SERVERS` if scraping multiple instances. | `True` | |
-| `ADGUARD_PASSWORDS` | The password to connect to the adguard api with. Must be in the same order as `ADGUARD_SERVERS` if scraping multiple instances. | `True` | |
-| `INTERVAL` | The interval that the exporter scrapes metrics from the server | `False` | `30s` |
-| `DEBUG` | Turns on the go profiler | `False` | `false` |
+| Variable       | Description                                                    | Required | Default |
+|----------------|----------------------------------------------------------------|----------|---------|
+| `APP_INTERVAL` | The interval that the exporter scrapes metrics from the server | `True`   |         |
+| `APP_DEBUG`    | Turns on the go profiler                                       | `True`   |         |
+| `SERVER_PORT`  | Server binding port                                            | `True`   |         |
+| `SERVER_HOST`  | Server binding host                                            | `False`  | `30s`   |
+| `CLIENTS_FILE` | Clients configuration                                          | `False`  | `false` |
+
+### Clients configuration
+
+The clients configuration is a YAML file that contains a list of clients used for fetching metrics.
+The file should look like this:
+
+```yaml
+- address: 127.0.0.1:3000  # AdGuard server address
+  username: username       # AdGuard username
+  password: password       # AdGuard password
+
+- address: 127.0.0.1:4000
+  username: username
+  password: password
+  
+- address: 127.0.0.1:5000
+  username: /path/to/username/file
+  password: /path/to/password/file
+```
 
 ## Usage
 
@@ -65,22 +93,22 @@ If you want to strip the scheme and port out of the `server` label in the metric
 
 ## Available Prometheus metrics
 
-| Metric name                                       | Description                                                       |
-| ---                                               | ---                                                               |
-| adguard_scrape_errors_total                       | The number of errors scraping a target                            |
-| adguard_protection_enabled                        | Whether DNS filtering is enabled                                  |
-| adguard_running                                   | Whether adguard is running or not                                 |
-| adguard_queries                                   | Total queries processed in the last 24 hours                      |
-| adguard_query_types                               | The number of DNS queries by adguard_query_types                  |
-| adguard_blocked_filtered                          | Total queries that have been blocked from filter lists            |
-| adguard_blocked_safesearch                        | Total queries that have been blocked due to safesearch            |
-| adguard_blocked_safebrowsing                      | Total queries that have been blocked due to safebrowsing          |
-| adguard_avg_processing_time_seconds               | The average query processing time in seconds                      |
-| adguard_avg_processing_time_milliseconds_bucket   | The processing time of queries                                    |
-| adguard_top_queried_domains                       | The number of queries for the top domains                         |
-| adguard_top_blocked_domains                       | The number of blocked queries for the top domains                 |
-| adguard_top_clients                               | The number of queries for the top clients                         |
-| adguard_top_upstreams                             | The number of repsonses for the top upstream servers              |
-| adguard_top_upstreams_avg_response_time_seconds   | The average response time for each of the top upstream servers    |
-| adguard_dhcp_enabled                              | Whether dhcp is enabled                                           |
-| adguard_dhcp_leases                               | The dhcp leases                                                   |
+| Metric name                                     | Description                                                    |
+|-------------------------------------------------|----------------------------------------------------------------|
+| adguard_scrape_errors_total                     | The number of errors scraping a target                         |
+| adguard_protection_enabled                      | Whether DNS filtering is enabled                               |
+| adguard_running                                 | Whether adguard is running or not                              |
+| adguard_queries                                 | Total queries processed in the last 24 hours                   |
+| adguard_query_types                             | The number of DNS queries by adguard_query_types               |
+| adguard_blocked_filtered                        | Total queries that have been blocked from filter lists         |
+| adguard_blocked_safesearch                      | Total queries that have been blocked due to safesearch         |
+| adguard_blocked_safebrowsing                    | Total queries that have been blocked due to safebrowsing       |
+| adguard_avg_processing_time_seconds             | The average query processing time in seconds                   |
+| adguard_avg_processing_time_milliseconds_bucket | The processing time of queries                                 |
+| adguard_top_queried_domains                     | The number of queries for the top domains                      |
+| adguard_top_blocked_domains                     | The number of blocked queries for the top domains              |
+| adguard_top_clients                             | The number of queries for the top clients                      |
+| adguard_top_upstreams                           | The number of repsonses for the top upstream servers           |
+| adguard_top_upstreams_avg_response_time_seconds | The average response time for each of the top upstream servers |
+| adguard_dhcp_enabled                            | Whether dhcp is enabled                                        |
+| adguard_dhcp_leases                             | The dhcp leases                                                |
