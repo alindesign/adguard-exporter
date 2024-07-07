@@ -1,20 +1,12 @@
-FROM golang:1.22-alpine AS builder
+FROM alpine:3.20.0 AS certs
 
-WORKDIR /app
+RUN apk add ca-certificates
 
-COPY go.mod go.sum ./
-RUN go mod download
+FROM scratch
+WORKDIR /
 
-COPY . .
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY adguard-exporter /adguard-exporter
+USER 65532:65532
 
-RUN go build -ldflags="-w -s" -v -o /app/bin/adguard-explorer
-
-FROM alpine:3.20
-
-COPY --from=builder /app/bin/adguard-explorer /app/adguard-explorer
-
-ENV SERVER_PORT 9618
-
-EXPOSE 9618
-
-ENTRYPOINT ["/app/adguard-explorer"]
+ENTRYPOINT ["/adguard-exporter"]
