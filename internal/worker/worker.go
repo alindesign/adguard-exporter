@@ -40,10 +40,10 @@ func collectClients(ctx context.Context, clients []*adguard.Client) {
 }
 
 func collect(ctx context.Context, client *adguard.Client) {
-	// Initialise the scrape errors counter with a 0
-	if !slices.Contains(initialised, client.Url()) {
-		metrics.ScrapeErrors.WithLabelValues(client.Url())
-		initialised = append(initialised, client.Url())
+	// Init the scrape errors counter with a 0
+	if !slices.Contains(initialised, client.Address()) {
+		metrics.ScrapeErrors.WithLabelValues(client.Address())
+		initialised = append(initialised, client.Address())
 	}
 
 	go collectStats(ctx, client)
@@ -56,7 +56,7 @@ func collectStats(ctx context.Context, client *adguard.Client) {
 	stats, err := client.GetStats(ctx)
 	if err != nil {
 		log.Printf("ERROR - could not get stats: %v\n", err)
-		metrics.ScrapeErrors.WithLabelValues(client.Url()).Inc()
+		metrics.ScrapeErrors.WithLabelValues(client.Address()).Inc()
 		return
 	}
 
@@ -65,16 +65,16 @@ func collectStats(ctx context.Context, client *adguard.Client) {
 		names, err = client.SearchClients(ctx, stats.TopClients)
 		if err != nil {
 			log.Printf("ERROR - could not search clients: %v\n", err)
-			metrics.ScrapeErrors.WithLabelValues(client.Url()).Inc()
+			metrics.ScrapeErrors.WithLabelValues(client.Address()).Inc()
 		}
 	}
 
-	metrics.TotalQueries.WithLabelValues(client.Url()).Set(float64(stats.TotalQueries))
-	metrics.BlockedFiltered.WithLabelValues(client.Url()).Set(float64(stats.BlockedFilteredQueries))
-	metrics.ReplacedSafesearch.WithLabelValues(client.Url()).Set(float64(stats.ReplacedSafesearchQueries))
-	metrics.ReplacedSafebrowsing.WithLabelValues(client.Url()).Set(float64(stats.ReplacedSafebrowsingQueries))
-	metrics.ReplacedParental.WithLabelValues(client.Url()).Set(float64(stats.ReplacedParentalQueries))
-	metrics.AvgProcessingTime.WithLabelValues(client.Url()).Set(float64(stats.AvgProcessingTime))
+	metrics.TotalQueries.WithLabelValues(client.Address()).Set(float64(stats.TotalQueries))
+	metrics.BlockedFiltered.WithLabelValues(client.Address()).Set(float64(stats.BlockedFilteredQueries))
+	metrics.ReplacedSafesearch.WithLabelValues(client.Address()).Set(float64(stats.ReplacedSafesearchQueries))
+	metrics.ReplacedSafebrowsing.WithLabelValues(client.Address()).Set(float64(stats.ReplacedSafebrowsingQueries))
+	metrics.ReplacedParental.WithLabelValues(client.Address()).Set(float64(stats.ReplacedParentalQueries))
+	metrics.AvgProcessingTime.WithLabelValues(client.Address()).Set(float64(stats.AvgProcessingTime))
 
 	for _, c := range stats.TopClients {
 		for key, val := range c {
@@ -82,31 +82,31 @@ func collectStats(ctx context.Context, client *adguard.Client) {
 			if name == "" {
 				name = key // fallback to IP if no name
 			}
-			metrics.TopClients.WithLabelValues(client.Url(), key, name).Set(float64(val))
+			metrics.TopClients.WithLabelValues(client.Address(), key, name).Set(float64(val))
 		}
 	}
 
 	for _, c := range stats.TopUpstreamsResponses {
 		for key, val := range c {
-			metrics.TopUpstreams.WithLabelValues(client.Url(), key).Set(float64(val))
+			metrics.TopUpstreams.WithLabelValues(client.Address(), key).Set(float64(val))
 		}
 	}
 
 	for _, c := range stats.TopQueriedDomains {
 		for key, val := range c {
-			metrics.TopQueriedDomains.WithLabelValues(client.Url(), key).Set(float64(val))
+			metrics.TopQueriedDomains.WithLabelValues(client.Address(), key).Set(float64(val))
 		}
 	}
 
 	for _, c := range stats.TopBlockedDomains {
 		for key, val := range c {
-			metrics.TopBlockedDomains.WithLabelValues(client.Url(), key).Set(float64(val))
+			metrics.TopBlockedDomains.WithLabelValues(client.Address(), key).Set(float64(val))
 		}
 	}
 
 	for _, c := range stats.TopUpstreamsAvgTimes {
 		for key, val := range c {
-			metrics.TopUpstreamsAvgTimes.WithLabelValues(client.Url(), key).Set(float64(val))
+			metrics.TopUpstreamsAvgTimes.WithLabelValues(client.Address(), key).Set(float64(val))
 		}
 	}
 }
@@ -115,45 +115,45 @@ func collectStatus(ctx context.Context, client *adguard.Client) {
 	status, err := client.GetStatus(ctx)
 	if err != nil {
 		log.Printf("ERROR - could not get status: %v\n", err)
-		metrics.ScrapeErrors.WithLabelValues(client.Url()).Inc()
+		metrics.ScrapeErrors.WithLabelValues(client.Address()).Inc()
 		return
 	}
 	// Persist the running version the first time
-	if _, ok := versions[client.Url()]; !ok {
-		versions[client.Url()] = status.Version
+	if _, ok := versions[client.Address()]; !ok {
+		versions[client.Address()] = status.Version
 	}
 
 	// Check if the adguard version has changed
-	if versions[client.Url()] != status.Version {
+	if versions[client.Address()] != status.Version {
 		metrics.Running.Reset()
 	}
 
-	metrics.Running.WithLabelValues(client.Url(), status.Version).Set(float64(status.Running.Int()))
-	metrics.ProtectionEnabled.WithLabelValues(client.Url()).Set(float64(status.ProtectionEnabled.Int()))
+	metrics.Running.WithLabelValues(client.Address(), status.Version).Set(float64(status.Running.Int()))
+	metrics.ProtectionEnabled.WithLabelValues(client.Address()).Set(float64(status.ProtectionEnabled.Int()))
 }
 
 func collectDhcp(ctx context.Context, client *adguard.Client) {
 	dhcp, err := client.GetDhcp(ctx)
 	if err != nil {
 		log.Printf("ERROR - could not get dhcp status: %v\n", err)
-		metrics.ScrapeErrors.WithLabelValues(client.Url()).Inc()
+		metrics.ScrapeErrors.WithLabelValues(client.Address()).Inc()
 		return
 	}
-	metrics.DhcpEnabled.WithLabelValues(client.Url()).Set(float64(dhcp.Enabled.Int()))
-	metrics.DhcpLeases.Record(client.Url(), dhcp.Leases)
+	metrics.DhcpEnabled.WithLabelValues(client.Address()).Set(float64(dhcp.Enabled.Int()))
+	metrics.DhcpLeases.Record(client.Address(), dhcp.Leases)
 }
 
 func collectQueryLogStats(ctx context.Context, client *adguard.Client) {
 	stats, times, queries, err := client.GetQueryLog(ctx)
 	if err != nil {
 		log.Printf("ERROR - could not get query type stats: %v\n", err)
-		metrics.ScrapeErrors.WithLabelValues(client.Url()).Inc()
+		metrics.ScrapeErrors.WithLabelValues(client.Address()).Inc()
 		return
 	}
 
 	for c, v := range stats {
 		for t, v := range v {
-			metrics.QueryTypes.WithLabelValues(client.Url(), t, c).Set(float64(v))
+			metrics.QueryTypes.WithLabelValues(client.Address(), t, c).Set(float64(v))
 		}
 	}
 
@@ -166,16 +166,16 @@ func collectQueryLogStats(ctx context.Context, client *adguard.Client) {
 		if protocol == "" {
 			protocol = "plain"
 		}
-		metrics.TotalQueriesDetails.WithLabelValues(client.Url(), l.Client, l.Reason, l.Status, l.Upstream, l.ClientInfo.Name, protocol).Set(elapsed)
-		metrics.TotalQueriesDetailsHistogram.WithLabelValues(client.Url(), l.Client, l.Reason, l.Status, l.Upstream, l.ClientInfo.Name, protocol).Observe(float64(elapsed))
+		metrics.TotalQueriesDetails.WithLabelValues(client.Address(), l.Client, l.Reason, l.Status, l.Upstream, l.ClientInfo.Name, protocol).Set(elapsed)
+		metrics.TotalQueriesDetailsHistogram.WithLabelValues(client.Address(), l.Client, l.Reason, l.Status, l.Upstream, l.ClientInfo.Name, protocol).Observe(float64(elapsed))
 	}
 
 	for _, t := range times {
 		metrics.ProcessingTimeBucketMilli.
-			WithLabelValues(client.Url(), t.Client, t.Upstream).
+			WithLabelValues(client.Address(), t.Client, t.Upstream).
 			Observe(float64(t.Elapsed.Milliseconds()))
 		metrics.ProcessingTimeBucket.
-			WithLabelValues(client.Url(), t.Client, t.Upstream).
+			WithLabelValues(client.Address(), t.Client, t.Upstream).
 			Observe(t.Elapsed.Seconds())
 	}
 }

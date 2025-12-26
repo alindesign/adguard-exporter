@@ -68,9 +68,6 @@ func (c *Config) loadClients() error {
 	if err != nil {
 		return fmt.Errorf("could not read clients file: %v", err)
 	}
-	if len(serv.BindAddr) == 0 {
-		serv.BindAddr = ":9618"
-	}
 
 	err = yaml.Unmarshal(contents, &c.Clients)
 	if err != nil {

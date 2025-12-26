@@ -37,15 +37,15 @@ func main() {
 
 	server := http.NewHttp(configuration)
 	go func() {
-		err := server.Serve(global.Server.BindAddr)
+		err := server.Serve()
 		if err != nil {
 			sigs <- syscall.SIGTERM
 			log.Printf("Error starting server: %v", err)
 		}
 	}()
 	go worker.Work(ctx, configuration.Interval, clients)
-	http.Ready(true)
-	http.Healthy(true)
+	server.Ready(true)
+	server.Healthy(true)
 
 	<-sigs
 	if err := server.Stop(ctx); err != nil {

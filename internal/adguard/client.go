@@ -30,30 +30,32 @@ func (c *Client) do(ctx context.Context, out any, method string, path string, qu
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.conf.Username, c.conf.Password)))
 	headers := http.Header{}
 	headers.Add("Authorization", fmt.Sprintf("Basic %s", auth))
-	endpoint := &url.URL{
-		Scheme:   "http",
-		Host:     c.Url(),
-		Path:     path,
-		RawQuery: query.Encode(),
-	}
-
-	req := &http.Request{Method: method, URL: endpoint, Header: headers}
-	req = req.WithContext(ctx)
-
-	resp, err := http.DefaultClient.Do(req)
+	endpoint, err := c.Url()
 	if err != nil {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		return fmt.Errorf("unexpected status code %d: %v", resp.StatusCode, err)
+	endpoint.Path = path
+	endpoint.RawQuery = query.Encode()
+	if endpoint.Scheme == "" {
+		endpoint.Scheme = "http"
+	}
+
+	req := &http.Request{Method: method, URL: endpoint, Header: headers}
+	req = req.WithContext(ctx)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	if err != nil {
 		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code %d (%s): %s", resp.StatusCode, endpoint.String(), string(body))
 	}
 
 	if err := json.Unmarshal(body, out); err != nil {
@@ -65,9 +67,14 @@ func (c *Client) do(ctx context.Context, out any, method string, path string, qu
 
 func (c *Client) doPost(ctx context.Context, path string, body any, out any) error {
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.conf.Username, c.conf.Password)))
-	url, err := url.Parse(fmt.Sprintf("%s%s", c.conf.Url, path))
+	endpoint, err := c.Url()
 	if err != nil {
 		return err
+	}
+
+	endpoint.Path = path
+	if endpoint.Scheme == "" {
+		endpoint.Scheme = "http"
 	}
 
 	b, err := json.Marshal(body)
@@ -75,7 +82,7 @@ func (c *Client) doPost(ctx context.Context, path string, body any, out any) err
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url.String(), bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -86,9 +93,9 @@ func (c *Client) doPost(ctx context.Context, path string, body any, out any) err
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 	if err != nil {
 		return err
 	}
@@ -141,7 +148,6 @@ func (c *Client) GetDhcp(ctx context.Context) (*DhcpStatus, error) {
 	return out, nil
 }
 
-// func (c *Client) GetQueryLog(ctx context.Context) (map[string]map[string]int, []QueryTime, QueryPerClient, error) {
 func (c *Client) GetQueryLog(ctx context.Context) (map[string]map[string]int, []QueryTime, []logEntry, error) {
 	logger := &queryLog{}
 	err := c.do(ctx, logger, http.MethodGet, "/control/querylog", url.Values{
@@ -162,7 +168,7 @@ func (c *Client) GetQueryLog(ctx context.Context) (map[string]map[string]int, []
 		return nil, nil, nil, err
 	}
 
-	return types, times, log.Log, nil
+	return types, times, logger.Log, nil
 }
 
 func (c *Client) getQueryTypes(logger *queryLog) (map[string]map[string]int, error) {
@@ -214,19 +220,19 @@ func (c *Client) getQueryTimes(l *queryLog) ([]QueryTime, error) {
 	return out, nil
 }
 
-func (c *Client) Url() string {
-	return c.conf.Address
+func (c *Client) Url() (*url.URL, error) {
+	return url.Parse(c.conf.Address)
 }
 
 func (c *Client) SearchClients(ctx context.Context, topClients []map[string]int) (map[string]string, error) {
 	reqBody := clientsSearchRequest{}
-    for _, c := range topClients {
-        for key := range c {
-            reqBody.Clients = append(reqBody.Clients, struct {
-                ID string `json:"id"`
-            }{ID: key})
-        }
-    }
+	for _, c := range topClients {
+		for key := range c {
+			reqBody.Clients = append(reqBody.Clients, struct {
+				ID string `json:"id"`
+			}{ID: key})
+		}
+	}
 
 	var resp []map[string]clientInfo
 	err := c.doPost(ctx, "/control/clients/search", reqBody, &resp)
@@ -244,4 +250,13 @@ func (c *Client) SearchClients(ctx context.Context, topClients []map[string]int)
 	}
 
 	return result, nil
+}
+
+func (c *Client) Address() string {
+	u, err := c.Url()
+	if err != nil {
+		return c.conf.Address
+	}
+
+	return u.Host
 }

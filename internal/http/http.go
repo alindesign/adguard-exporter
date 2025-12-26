@@ -19,11 +19,10 @@ type Http struct {
 	ready    bool
 	healthy  bool
 	healthMu *sync.Mutex
+	addr     string
 }
 
 func NewHttp(configuration *config.Config) *Http {
-	addr := net.JoinHostPort(configuration.Host, configuration.Port)
-
 	e := echo.New()
 	e.HideBanner = true
 
@@ -33,16 +32,17 @@ func NewHttp(configuration *config.Config) *Http {
 		e.GET("/debug/*", echo.WrapHandler(http.DefaultServeMux))
 	}
 
-	http := &Http{
+	instance := &Http{
 		e:        e,
 		ready:    false,
 		healthMu: &sync.Mutex{},
+		addr:     net.JoinHostPort(configuration.Host, configuration.Port),
 	}
 
-	http.e.GET("/healthz", http.healthz())
-	http.e.GET("/readyz", http.readyz())
+	instance.e.GET("/healthz", instance.healthz())
+	instance.e.GET("/readyz", instance.readyz())
 
-	return http
+	return instance
 }
 
 func (h *Http) Serve() error {
