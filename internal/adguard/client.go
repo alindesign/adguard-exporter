@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
@@ -28,17 +27,11 @@ func NewClient(conf config.Client) *Client {
 
 func (c *Client) do(ctx context.Context, out any, method string, path string, query url.Values) error {
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.conf.Username, c.conf.Password)))
-	addr, err := netip.ParseAddrPort(c.Url())
-	if err != nil {
-		return err
-	}
-
 	headers := http.Header{}
 	headers.Add("Authorization", fmt.Sprintf("Basic %s", auth))
-
 	endpoint := &url.URL{
 		Scheme:   "http",
-		Host:     addr.String(),
+		Host:     c.Url(),
 		Path:     path,
 		RawQuery: query.Encode(),
 	}
@@ -52,12 +45,12 @@ func (c *Client) do(ctx context.Context, out any, method string, path string, qu
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
 		return fmt.Errorf("unexpected status code %d: %v", resp.StatusCode, err)
 	}
 
-	defer resp.Body.Close()
-
 	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 	if err != nil {
 		return err
 	}
